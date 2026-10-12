@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}DocSort{% endblock %}</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f5f6f8; color: #1d2733; }
+  header { background: #243447; color: #fff; padding: 12px 24px; display: flex; gap: 24px; align-items: center; }
+  header a { color: #cfe3ff; text-decoration: none; } header h1 { font-size: 18px; margin: 0; }
+  main { max-width: 1000px; margin: 20px auto; padding: 0 16px; }
+  .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px #0002; }
+  input, select, button { padding: 7px 10px; border: 1px solid #c4cad2; border-radius: 4px; font-size: 14px; }
+  button { background: #2b6cb0; color: #fff; border-color: #2b6cb0; cursor: pointer; }
+  button.secondary { background: #fff; color: #2b6cb0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; } td, th { padding: 8px 6px; border-bottom: 1px solid #eee; text-align: left; }
+  .badge { background: #e3ebf5; border-radius: 10px; padding: 2px 9px; font-size: 12px; }
+  .conf { display: inline-block; width: 70px; height: 8px; background: #e5e7eb; border-radius: 4px; vertical-align: middle; margin-right: 6px; }
+  .conf > span { display: block; height: 100%; border-radius: 4px; }
+  .high > span { background: #2e9e5b; } .medium > span { background: #e0a100; } .low > span { background: #d64545; }
+  .snippet { color: #555; font-size: 13px; margin: 4px 0 0; } .muted { color: #777; font-size: 13px; }
+  mark { background: #fff3a8; }
+</style>
+</head>
+<body>
+<header><h1>DocSort</h1><a href="/">Search</a><a href="/admin">Admin</a></header>
+<main>{% block content %}{% endblock %}</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const confBar = (d) => `<span class="conf ${d.confidence_level}" title="${d.confidence_level} confidence"><span style="width:${Math.round(d.confidence * 100)}%"></span></span>${Math.round(d.confidence * 100)}%`;
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || r.statusText);
+  return body;
+}
+async function loadCategories(select, withAll) {
+  const cats = await api('/api/categories');
+  select.innerHTML = (withAll ? '<option value="">All categories</option>' : '') +
+    cats.map((c) => `<option value="${esc(c.name)}">${esc(c.name)} (${c.documents})</option>`).join('');
+  return cats;
+}
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

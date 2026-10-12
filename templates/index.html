@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h3>Upload documents</h3>
+  <input type="file" id="file" accept=".pdf,.docx,.txt" multiple>
+  <button id="upload">Upload &amp; classify</button>
+  <div id="uploadResult" class="muted"></div>
+</section>
+<section class="card">
+  <h3>Search</h3>
+  <input id="q" placeholder="Keywords…" size="36">
+  <select id="category"></select>
+  <select id="minConf">
+    <option value="0">Any confidence</option><option value="0.4">Medium+</option><option value="0.7">High only</option>
+  </select>
+  <button id="go">Search</button>
+  <div id="results" style="margin-top:14px"></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+loadCategories($('#category'), true);
+
+$('#upload').onclick = async () => {
+  const fd = new FormData();
+  [...$('#file').files].forEach((f) => fd.append('file', f));
+  const out = $('#uploadResult');
+  try {
+    const r = await fetch('/api/documents', { method: 'POST', body: fd });
+    const body = await r.json();
+    out.innerHTML = (body.documents || []).map((d) =>
+      `<div>${esc(d.filename)} → <span class="badge">${esc(d.category)}</span> ${confBar(d)}</div>`).join('') +
+      (body.errors || []).map((e) => `<div style="color:#c0392b">${esc(e.filename)}: ${esc(e.error)}</div>`).join('') +
+      (body.error ? esc(body.error) : '');
+    loadCategories($('#category'), true);
+  } catch (e) { out.textContent = e.message; }
+};
+
+async function search() {
+  const q = $('#q').value.trim();
+  if (!q) return;
+  const params = new URLSearchParams({ q, category: $('#category').value, min_confidence: $('#minConf').value });
+  const hits = await api('/api/search?' + params);
+  const re = new RegExp('(' + q.split(/\s+/).filter(Boolean).map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+  $('#results').innerHTML = hits.length ? hits.map((h) => `
+    <div style="margin-bottom:14px">
+      <b>${esc(h.title)}</b> <span class="badge">${esc(h.category)}</span> ${confBar(h)}
+      <span class="muted">relevance ${h.score.toFixed(3)} · ${esc(h.filename)}${h.review_status !== 'pending' ? ' · ' + h.review_status : ''}</span>
+      <p class="snippet">${esc(h.snippet).replace(re, '<mark>$1</mark>')}</p>
+    </div>`).join('') : '<p class="muted">No matching documents.</p>';
+}
+$('#go').onclick = search;
+$('#q').addEventListener('keydown', (e) => e.key === 'Enter' && search());
+</script>
+{% endblock %}

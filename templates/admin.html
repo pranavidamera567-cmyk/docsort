@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}DocSort admin{% endblock %}
+{% block content %}
+<section class="card">
+  <h3>Review predictions</h3>
+  <select id="status"><option value="">All</option><option value="pending" selected>Pending review</option>
+    <option value="approved">Approved</option><option value="corrected">Corrected</option></select>
+  <select id="catFilter"></select>
+  <button class="secondary" id="retrain">Retrain model</button>
+  <a href="/api/export/summary.csv"><button class="secondary">Export summary CSV</button></a>
+  <a href="/api/export/documents.csv"><button class="secondary">Export documents CSV</button></a>
+  <div id="msg" class="muted"></div>
+  <table style="margin-top:12px">
+    <thead><tr><th>Document</th><th>Predicted</th><th>Confidence</th><th>Status</th><th>Assign category</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</section>
+<section class="card">
+  <h3>Categories</h3>
+  <div id="cats"></div>
+  <input id="newCat" placeholder="New category name"> <input id="newDesc" placeholder="Description">
+  <button id="addCat">Add category</button>
+  <p class="muted">A new category learns from documents you assign to it — review a few, then click “Retrain model”.</p>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+let cats = [];
+async function refresh() {
+  cats = await loadCategories($('#catFilter'), true);
+  $('#cats').innerHTML = cats.map((c) => `<span class="badge" title="${esc(c.description)}">${esc(c.name)}: ${c.documents}</span> `).join('');
+  const p = new URLSearchParams({ status: $('#status').value, category: $('#catFilter').value });
+  const docs = await api('/api/documents?' + p);
+  $('#rows').innerHTML = docs.map((d) => `
+    <tr><td><b>${esc(d.title)}</b><div class="muted">${esc(d.filename)}</div></td>
+      <td>${esc(d.predicted_category)}</td><td>${confBar(d)}</td><td>${esc(d.review_status)}</td>
+      <td><select data-id="${d.id}">${cats.map((c) => `<option ${c.name === d.category ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+          <button data-ok="${d.id}">Save</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Nothing to show.</td></tr>';
+  document.querySelectorAll('button[data-ok]').forEach((b) => b.onclick = async () => {
+    const category = document.querySelector(`select[data-id="${b.dataset.ok}"]`).value;
+    await api(`/api/documents/${b.dataset.ok}/review`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category }) });
+    refresh();
+  });
+}
+$('#status').onchange = $('#catFilter').onchange = refresh;
+$('#retrain').onclick = async () => {
+  const r = await api('/api/model/retrain', { method: 'POST' });
+  $('#msg').textContent = `Retrained on ${r.training_examples} examples across ${r.categories} categories; pending documents re-classified.`;
+  refresh();
+};
+$('#addCat').onclick = async () => {
+  await api('/api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: $('#newCat').value, description: $('#newDesc').value }) });
+  $('#newCat').value = $('#newDesc').value = '';
+  refresh();
+};
+refresh();
+</script>
+{% endblock %}
